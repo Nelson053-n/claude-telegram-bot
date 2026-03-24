@@ -3,8 +3,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { randomUUID } from "crypto";
-import https from "https";
-import { createWriteStream, unlinkSync } from "fs";
+import { unlinkSync } from "fs";
 
 // Load token
 const envPath = join(homedir(), ".claude", "channels", "telegram", ".env");
@@ -113,70 +112,55 @@ function isRateLimited(userId: string): boolean {
   return false;
 }
 
-// ── Voice transcription ─────────────────────────────────────────────
-async function downloadFile(url: string, dest: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      res.pipe(createWriteStream(dest));
-      res.on("end", resolve);
-      res.on("error", reject);
-    }).on("error", reject);
-  });
-}
+// ── Voice transcription (local whisper.cpp) ─────────────────────────
+const WHISPER_BIN = "/home/nel/whisper.cpp/build/bin/whisper-cli";
+const WHISPER_MODEL = "/home/nel/whisper.cpp/models/ggml-tiny.bin";
 
 async function transcribeVoice(fileId: string, ctx: any): Promise<string> {
+  const file = await ctx.api.getFile(fileId);
+  const url = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
+
+  const uid = randomUUID();
+  const oggFile = `/tmp/voice_${uid}.ogg`;
+  const wavFile = `/tmp/voice_${uid}.wav`;
+
   try {
-    // Get file info
-    const file = await ctx.api.getFile(fileId);
-    const filePath = file.file_path;
-    const url = `https://api.telegram.org/file/bot${ctx.api.token}/${filePath}`;
+    // Download OGG from Telegram
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
+    await Bun.write(oggFile, resp);
 
-    // Download OGG file
-    const tmpFile = `/tmp/voice_${randomUUID()}.ogg`;
-    await downloadFile(url, tmpFile);
+    // Convert OGG → WAV 16kHz mono (whisper.cpp requirement)
+    const ffmpeg = Bun.spawn(["ffmpeg", "-i", oggFile, "-ar", "16000", "-ac", "1", "-y", wavFile], {
+      stdout: "pipe", stderr: "pipe",
+    });
+    await ffmpeg.exited;
 
-    // Transcribe using Claude's Anthropic SDK (if available via spawned process)
-    // For now, use a simple approach: spawn a worker that calls OpenAI Whisper or similar
-    // As fallback, we'll just log and ask user to repeat in text
-    const transcript = await transcribeWithWhisper(tmpFile);
+    // Run whisper.cpp
+    const whisper = Bun.spawn([
+      WHISPER_BIN, "-m", WHISPER_MODEL,
+      "-f", wavFile,
+      "-l", "auto",
+      "--no-timestamps",
+      "-t", "4",
+    ], { stdout: "pipe", stderr: "pipe" });
 
-    // Clean up
-    try { unlinkSync(tmpFile); } catch {}
+    const whisperTimeout = setTimeout(() => whisper.kill(), 30_000);
+    const stdout = await new Response(whisper.stdout).text();
+    await whisper.exited;
+    clearTimeout(whisperTimeout);
 
+    // whisper.cpp outputs text with leading whitespace
+    const transcript = stdout.trim();
+    console.log(`Whisper: "${transcript.slice(0, 100)}"`);
     return transcript;
   } catch (err: any) {
     console.error("Voice transcription error:", err.message);
-    throw new Error("Не удалось распознать голос. Пожалуйста, отправьте текстом.");
+    throw new Error("Не удалось распознать голос. Отправьте текстом.");
+  } finally {
+    try { unlinkSync(oggFile); } catch {}
+    try { unlinkSync(wavFile); } catch {}
   }
-}
-
-async function transcribeWithWhisper(filePath: string): Promise<string> {
-  // Check if we have OPENAI_API_KEY
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY not configured");
-  }
-
-  const formData = new FormData();
-  const fileBuffer = readFileSync(filePath);
-  formData.append("file", new Blob([fileBuffer]), "audio.ogg");
-  formData.append("model", "whisper-1");
-
-  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Whisper API error: ${error}`);
-  }
-
-  const result = await response.json() as { text?: string };
-  return result.text || "";
 }
 
 // ── Claude invocation ───────────────────────────────────────────────
