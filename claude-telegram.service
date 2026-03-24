@@ -1,0 +1,21 @@
+[Unit]
+Description=Claude Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/nel/newbot
+ExecStart=/home/nel/newbot/start-bot.sh
+ExecStop=/usr/bin/tmux kill-session -t claude-tg
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+RestartSec=10
+Environment=HOME=/home/nel
+Environment=PATH=/home/nel/.local/bin:/home/nel/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
