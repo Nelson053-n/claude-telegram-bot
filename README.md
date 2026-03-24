@@ -1,135 +1,301 @@
-# Claude Telegram Bot
+# NewBot: Claude AI + Telegram Bot + Web Dashboard
 
-Telegram-бот, работающий на базе [Claude Code CLI](https://claude.com/claude-code). Принимает сообщения в Telegram и отвечает через Claude AI.
+Полнофункциональная система для генерации контента через Claude AI с Telegram ботом, REST API, веб-интерфейсом и платёжной системой.
 
-## Стек
+## 🏗️ Архитектура
 
-- **Bun** — runtime
-- **Grammy** — Telegram Bot API framework
-- **Claude Code CLI** — AI-бэкенд (`claude -p`)
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    NewBot System                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Telegram Bot (Bun/Grammy)                                   │
+│  ├─ Text & Voice Message Handler                             │
+│  ├─ Session Management                                       │
+│  ├─ Claude AI Integration                                    │
+│  └─ Background Task Support                                  │
+│       │                                                       │
+│       └──> OpenAI Whisper (voice transcription)              │
+│                                                               │
+│  REST API (Express/Node)                                     │
+│  ├─ User Management                                          │
+│  ├─ Generation History                                       │
+│  ├─ Token System                                             │
+│  ├─ Stripe Integration                                       │
+│  └─ JWT Authentication                                       │
+│       │                                                       │
+│       └──> PostgreSQL Database                               │
+│                                                               │
+│  Web Dashboard (React/Vite)                                  │
+│  ├─ Generation Gallery                                       │
+│  ├─ User Profile                                             │
+│  ├─ Payment UI                                               │
+│  └─ Responsive Design                                        │
+│       │                                                       │
+│       └──> REST API + JWT                                    │
+│                                                               │
+│  Infrastructure                                              │
+│  ├─ Docker Compose (PostgreSQL, Redis)                       │
+│  ├─ Cloud Ready (Heroku, AWS, etc)                           │
+│  └─ Environment-based Configuration                          │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 📦 Компоненты
+
+### 1. **Telegram Bot** (`bot.ts`)
+- **Stек:** Bun, Grammy, Claude Code CLI
+- **Возможности:**
+  - Текстовые и голосовые сообщения
+  - Session management (основная + quick сессия)
+  - Background tasks (до 10 минут)
+  - Rate limiting (5 req/min)
+  - Typing indicator
+- **Команды:** `/help`, `/reset`, `/status`, `/web`
+
+### 2. **REST API** (`api/`)
+- **Стек:** Express.js, PostgreSQL, JWT, TypeScript
+- **Функции:**
+  - Пользователи (создание, профиль, статистика)
+  - История генераций (создание, просмотр, статус)
+  - Токены (баланс, покупка, транзакции)
+  - Платежи (Stripe интеграция)
+  - Документированные маршруты
+- **Аутентификация:** JWT Bearer tokens
+
+### 3. **Веб-приложение** (`web/`)
+- **Стек:** React 18, Vite, TailwindCSS, Zustand
+- **Страницы:**
+  - LoginPage (Telegram OAuth)
+  - HomePage (галерея, профиль, платежи)
+  - GenerationGallery (история с фильтрацией)
+- **Особенности:**
+  - Responsive design
+  - LocalStorage persistence
+  - Real-time status updates
+
+### 4. **Инфраструктура**
+- **Docker Compose** с PostgreSQL, Redis
+- **.env.example** для конфигурации
+- Готово к деплою на Heroku, AWS, VPS
+
+## Технологический стек
+
+- **Backend:** Express.js, PostgreSQL, JWT, Stripe
+- **Telegram:** Grammy, OpenAI Whisper, Claude Code CLI
+- **Frontend:** React 18, Vite, TailwindCSS, Zustand
+- **DevOps:** Docker, Docker Compose, Bun
 
 ## Как это работает
 
+### 1️⃣ Telegram Bot Flow
+
 ```
-Telegram → Grammy (long-polling) → Bun.spawn → claude -p → ответ → Telegram
+Telegram User
+    ↓
+Text/Voice → Grammy (polling)
+    ↓
+bot.ts Handler
+    ├─ Voice? → transcribeWithWhisper (OpenAI)
+    └─ Text? → use as-is
+    ↓
+askClaude (Bun.spawn)
+    ├─ Phase 1: Quick try (45s)
+    │  └─ Success? → Reply immediately
+    └─ Phase 2: Timeout → Background task
+       ├─ Create quick session (parallel questions)
+       └─ Continue in background (up to 10min)
+    ↓
+Database (async)
+    └─ Save generation if API enabled
+    ↓
+Telegram → Reply with result
 ```
 
-Бот получает сообщения через Grammy, вызывает Claude CLI в режиме `-p` (print & exit) для каждого сообщения и отправляет ответ обратно в чат. Пока Claude думает, в чате отображается индикатор "печатает...".
+### 2️⃣ Web App Flow
 
-## Настройка
+```
+User → LoginPage (Telegram OAuth)
+    ↓
+/api/auth/telegram → JWT Token
+    ↓
+localStorage → Store token
+    ↓
+HomePage
+    ├─ Gallery Tab
+    │  └─ /api/generations → List all
+    ├─ Profile Tab
+    │  └─ /api/users/me → User info
+    └─ Payments Tab
+       └─ Stripe integration (coming soon)
+```
 
-### 1. Зависимости
+### 3️⃣ Database Flow
+
+```
+Generation Created → Create record (status: pending)
+    ↓
+Claude Processing → Update with result
+    ↓
+Save to DB → userGenerations table
+    ↓
+Web Gallery → Display history
+```
+
+## 🚀 Быстрый старт
+
+### 1. Подготовка
 
 ```bash
+# Клонируем репо и устанавливаем зависимости
+git clone <repo>
+cd newbot
 bun install
+
+# Копируем конфиг
+cp .env.example .env
+
+# Создаём Telegram бота
+# Напишите @BotFather в Telegram, создайте бота и получите токен
+
+# Заполняем .env
+# TELEGRAM_BOT_TOKEN=...
+# OPENAI_API_KEY=sk-... (для голоса)
+# ANTHROPIC_API_KEY=sk-ant-... (для Claude)
 ```
 
-### 2. Токен бота
-
-Создайте файл `~/.claude/channels/telegram/.env`:
-
-```
-TELEGRAM_BOT_TOKEN=ваш_токен_от_BotFather
-```
-
-Или передайте через переменную окружения:
+### 2. Запуск Telegram Бота
 
 ```bash
-TELEGRAM_BOT_TOKEN=ваш_токен bun bot.ts
-```
+# Требует Claude Code CLI установленный и авторизованный
+# claude --version
+# claude auth status
 
-### 3. Допуск пользователей
-
-Файл `~/.claude/channels/telegram/access.json`:
-
-```json
-{
-  "dmPolicy": "allowlist",
-  "allowFrom": ["123456789"],
-  "groups": {},
-  "pending": {}
-}
-```
-
-`allowFrom` — массив Telegram user ID, которым разрешено общаться с ботом. Если массив пустой — доступ для всех.
-
-### 4. OpenAI API Key (для голосовых сообщений)
-
-Если хотите использовать голосовые сообщения, нужен OpenAI API ключ:
-
-```bash
-export OPENAI_API_KEY=sk-...
-```
-
-Или добавьте в `~/.claude/channels/telegram/.env`:
-
-```
-OPENAI_API_KEY=sk-...
-```
-
-Без этого ключа голосовые сообщения не будут работать.
-
-### 5. Claude Code CLI
-
-Должен быть установлен и авторизован:
-
-```bash
-claude --version
-claude auth status
-```
-
-### 6. Конфигурация модели
-
-В файле `ask-claude.sh` настраивается модель и system prompt:
-
-```bash
-claude -p --model haiku ...
-```
-
-Доступные модели: `haiku`, `sonnet`, `opus`.
-
-## Запуск
-
-### Напрямую
-
-```bash
 bun bot.ts
 ```
 
-### Через tmux
+### 3. Запуск API (optional, для истории генераций)
 
 ```bash
-./start-bot.sh
+# Запускаем Docker контейнеры
+docker-compose up -d
+
+# API стартует на http://localhost:3000
+# Настраиваем OPENAI_API_KEY и другие переменные в .env
 ```
 
-### Как systemd-служба
-
-Скопируйте unit-файл:
+### 4. Запуск Веб-приложения (optional)
 
 ```bash
+# В папке web/
+cd web
+npm install
+npm run dev
+
+# App доступна на http://localhost:5173
+```
+
+### Минимальная конфигурация
+
+Для работы только бота нужны:
+
+```env
+TELEGRAM_BOT_TOKEN=ваш_токен
+OPENAI_API_KEY=sk-... # для голоса
+ANTHROPIC_API_KEY=sk-ant-... # для Claude
+```
+
+### Полная конфигурация
+
+Для всех компонентов см. `.env.example`:
+
+```bash
+# Bot
+TELEGRAM_BOT_TOKEN=...
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+
+# API + Web
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=newbot
+DB_USER=postgres
+DB_PASSWORD=postgres
+
+JWT_SECRET=your-secret-key
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+
+## Запуск в Production
+
+### Systemd Service
+
+```bash
+# Установка unit файла
 cp claude-telegram.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now claude-telegram.service
+
+# Управление
+systemctl --user status claude-telegram      # статус
+systemctl --user restart claude-telegram     # перезапуск
+systemctl --user stop claude-telegram        # остановка
+journalctl --user -u claude-telegram -f      # логи
 ```
 
-Управление:
+### Docker
 
 ```bash
-systemctl --user status claude-telegram    # статус
-systemctl --user restart claude-telegram   # перезапуск
-systemctl --user stop claude-telegram      # остановка
-journalctl --user -u claude-telegram -f    # логи
+# Запуск API в контейнере
+docker-compose up -d api
+
+# Запуск всего стека (API + DB + Web)
+docker-compose up
 ```
 
-## Файлы
+### Облачные сервисы
 
-| Файл | Описание |
-|------|----------|
-| `bot.ts` | Основной код бота (Grammy + Bun.spawn) |
-| `ask-claude.sh` | Обёртка для вызова Claude CLI |
-| `start-bot.sh` | Запуск в tmux-сессии |
-| `telegram-mcp.json` | Пустой MCP-конфиг (отключает плагины для быстрого старта) |
-| `claude-telegram.service` | Systemd unit для автозапуска |
+- **Heroku:** `heroku create && git push heroku main`
+- **Railway:** Подключить GitHub репо
+- **Render:** Создать Web Service и Background Worker
+- **AWS:** ECS + RDS + CloudFront
+- **DigitalOcean:** App Platform
+
+## 📁 Файлы проекта
+
+```
+newbot/
+├── bot.ts                          # Telegram bot (Grammy + Claude)
+├── ask-claude.sh                   # Wrapper для Claude CLI
+├── api/                            # REST API (Express)
+│   ├── server.ts                   # Main server
+│   ├── models.ts                   # Database models
+│   ├── routes/                     # API routes
+│   │   ├── auth.ts
+│   │   ├── generations.ts
+│   │   ├── payments.ts
+│   │   └── users.ts
+│   ├── db/                         # Database
+│   │   ├── client.ts               # Connection pool
+│   │   └── schema.sql              # Tables
+│   └── bot-integration.ts          # Bot ↔ API bridge
+├── web/                            # React web app (Vite)
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   ├── pages/                  # LoginPage, HomePage
+│   │   ├── components/             # Gallery, GenerationCard
+│   │   └── lib/                    # API client, Zustand store
+│   └── index.html
+├── docker-compose.yml              # Local development stack
+├── Dockerfile.api                  # API container
+├── package.json                    # Main dependencies
+├── .env.example                    # Configuration template
+├── README.md                        # This file
+└── sessions.json                   # Bot session cache (runtime)
+```
 
 ## Особенности
 
@@ -187,51 +353,68 @@ Sessions:
   quick session: параллельный диалог при фоновых задачах
 ```
 
-## Phase 2: API + БД ✅
+## 🎉 Completion Status
 
-- ✅ REST API для генераций (Express.js)
-- ✅ История генераций в БД (PostgreSQL)
-- ✅ Платёжная система (Stripe integration)
-- ✅ JWT аутентификация
-- ✅ Docker Compose для разработки
-- 🔄 Веб-галерея результатов (в разработке)
-- 🔄 Админ-панель (в разработке)
+### ✅ Phase 1: Telegram Bot
+- ✅ Text message handling
+- ✅ Voice message transcription (OpenAI Whisper)
+- ✅ Session management (main + quick)
+- ✅ Background tasks (up to 10 min)
+- ✅ Rate limiting & typing indicator
+- ✅ Commands: /help, /reset, /status, /web
 
-### API Быстрый старт
+### ✅ Phase 2: API + Database
+- ✅ Express.js REST API
+- ✅ PostgreSQL database schema
+- ✅ JWT authentication
+- ✅ User management
+- ✅ Generation history
+- ✅ Token system
+- ✅ Stripe integration (routes ready)
+- ✅ Docker Compose stack
+- ✅ Comprehensive documentation
+
+### ✅ Phase 3: Web Application
+- ✅ React 18 + Vite
+- ✅ Zustand state management
+- ✅ TailwindCSS responsive design
+- ✅ Login page (Telegram OAuth)
+- ✅ Home page with tabs
+- ✅ Generation gallery
+- ✅ User profile page
+- ✅ TypeScript + Error handling
+
+### 🚧 Future Improvements (Phase 4+)
+- [ ] Real-time updates (WebSocket)
+- [ ] Payment UI polish & Stripe webhook
+- [ ] Admin dashboard
+- [ ] Advanced filtering & search
+- [ ] Export/download results
+- [ ] Dark mode
+- [ ] Multi-language support
+- [ ] API rate limiting
+- [ ] Analytics dashboard
+
+## Документация
+
+- **Bot:** Функции в `bot.ts` с примерами
+- **API:** Подробно в [api/README.md](./api/README.md)
+- **Web:** Компоненты описаны в [web/README.md](./web/README.md)
+
+## Быстрые команды
 
 ```bash
-# 1. Настройка
-cp .env.example .env
-bun install
+# Bot
+bun bot.ts
 
-# 2. Запуск Docker контейнеров
-docker-compose up -d
-
-# 3. Запуск API сервера
+# API
 bun run api
+docker-compose up
+
+# Web
+cd web && npm install && npm run dev
+
+# All together
+docker-compose up -d && bun bot.ts &
+cd web && npm run dev &
 ```
-
-API доступен на `http://localhost:3000`
-
-**Документация:** см. [api/README.md](./api/README.md)
-
-### Интеграция бота с API
-
-Бот автоматически сохраняет историю генераций и пользовательские данные:
-
-```typescript
-import { saveGenerationStart, saveGenerationResult } from "./api/bot-integration";
-
-// Сохранить начало генерации
-const task = await saveGenerationStart(telegramId, prompt);
-
-// Сохранить результат
-await saveGenerationResult(task.generationId, result, tokensUsed);
-```
-
-### Система токенов
-
-- Каждый пользователь имеет баланс токенов
-- Генерация вычитает токены (по умолчанию 100)
-- Платёж через Stripe добавляет токены
-- Все транзакции логируются в БД
