@@ -187,10 +187,51 @@ Sessions:
   quick session: параллельный диалог при фоновых задачах
 ```
 
-## Phase 2 (В разработке)
+## Phase 2: API + БД ✅
 
-- REST API для генераций
-- История генераций в БД
-- Платёжная система (Stripe)
-- Веб-галерея результатов
-- Админ-панель
+- ✅ REST API для генераций (Express.js)
+- ✅ История генераций в БД (PostgreSQL)
+- ✅ Платёжная система (Stripe integration)
+- ✅ JWT аутентификация
+- ✅ Docker Compose для разработки
+- 🔄 Веб-галерея результатов (в разработке)
+- 🔄 Админ-панель (в разработке)
+
+### API Быстрый старт
+
+```bash
+# 1. Настройка
+cp .env.example .env
+bun install
+
+# 2. Запуск Docker контейнеров
+docker-compose up -d
+
+# 3. Запуск API сервера
+bun run api
+```
+
+API доступен на `http://localhost:3000`
+
+**Документация:** см. [api/README.md](./api/README.md)
+
+### Интеграция бота с API
+
+Бот автоматически сохраняет историю генераций и пользовательские данные:
+
+```typescript
+import { saveGenerationStart, saveGenerationResult } from "./api/bot-integration";
+
+// Сохранить начало генерации
+const task = await saveGenerationStart(telegramId, prompt);
+
+// Сохранить результат
+await saveGenerationResult(task.generationId, result, tokensUsed);
+```
+
+### Система токенов
+
+- Каждый пользователь имеет баланс токенов
+- Генерация вычитает токены (по умолчанию 100)
+- Платёж через Stripe добавляет токены
+- Все транзакции логируются в БД
