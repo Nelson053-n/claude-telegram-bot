@@ -2,5 +2,6 @@ node_modules/
 bun.lock
 /tmp/
 *.log
+bot.log
 .env
 telegram-mcp.json

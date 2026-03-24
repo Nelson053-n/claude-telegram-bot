@@ -28,6 +28,19 @@ try {
 
 const bot = new Bot(token);
 
+// Rate limiting: max 5 requests per minute per user
+const rateLimits = new Map<string, number[]>();
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const window = 60_000;
+  const maxRequests = 5;
+  const timestamps = (rateLimits.get(userId) || []).filter(t => now - t < window);
+  if (timestamps.length >= maxRequests) return true;
+  timestamps.push(now);
+  rateLimits.set(userId, timestamps);
+  return false;
+}
+
 async function askClaude(prompt: string): Promise<string> {
   const proc = Bun.spawn(["/home/nel/newbot/ask-claude.sh", prompt], {
     cwd: "/home/nel/newbot",
@@ -62,6 +75,12 @@ bot.on("message:text", async (ctx) => {
   if (allowedUsers.length > 0 && !allowedUsers.includes(userId)) return;
 
   const text = ctx.message.text;
+
+  if (isRateLimited(userId)) {
+    await ctx.reply("Слишком много запросов. Подождите минуту.").catch(() => {});
+    return;
+  }
+
   console.log(`[${new Date().toISOString()}] ${ctx.from.username}: ${text}`);
 
   const typing = startTyping(ctx.chat.id);
