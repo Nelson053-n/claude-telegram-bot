@@ -33,26 +33,87 @@ Server starts on `http://localhost:3000`
 
 ### Authentication
 
-- `POST /api/auth/telegram` — Login with Telegram ID
-- `POST /api/auth/refresh` — Refresh JWT token
+**Login with Telegram ID:**
+```bash
+curl -X POST http://localhost:3000/api/auth/telegram \
+  -H "Content-Type: application/json" \
+  -d '{"telegramId": 123456789, "username": "john_doe"}'
+```
+
+**Refresh JWT Token:**
+```bash
+curl -X POST http://localhost:3000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"token": "eyJhbGc..."}'
+```
 
 ### Generations
 
-- `POST /api/generations` — Create new generation
-- `GET /api/generations` — List user's generations
-- `GET /api/generations/:id` — Get generation by ID
+**Create new generation:**
+```bash
+curl -X POST http://localhost:3000/api/generations \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Write a poem", "tokensRequired": 100}'
+```
+
+**List user's generations:**
+```bash
+curl -X GET "http://localhost:3000/api/generations?limit=50&offset=0" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Get generation by ID:**
+```bash
+curl -X GET http://localhost:3000/api/generations/123 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
 
 ### Payments
 
-- `POST /api/payments/create-intent` — Create Stripe payment intent
-- `POST /api/payments/confirm` — Confirm payment and grant tokens
-- `GET /api/payments/history` — List payment history
+**Create Stripe payment intent:**
+```bash
+curl -X POST http://localhost:3000/api/payments/create-intent \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 10000, "tokensAmount": 1000}'
+```
+
+**Confirm payment:**
+```bash
+curl -X POST http://localhost:3000/api/payments/confirm \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"paymentIntentId": "pi_xxx"}'
+```
+
+**List payment history:**
+```bash
+curl -X GET http://localhost:3000/api/payments/history \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
 
 ### Users
 
-- `GET /api/users/me` — Get current user profile
-- `PUT /api/users/me` — Update user profile
-- `GET /api/users/stats` — Get usage statistics
+**Get current user profile:**
+```bash
+curl -X GET http://localhost:3000/api/users/me \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Update user profile (email):**
+```bash
+curl -X PUT http://localhost:3000/api/users/me \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com"}'
+```
+
+**Get usage statistics:**
+```bash
+curl -X GET http://localhost:3000/api/users/stats \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
 
 ## Architecture
 

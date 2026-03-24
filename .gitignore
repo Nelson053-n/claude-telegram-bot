@@ -1,8 +1,43 @@
+# Dependencies
 node_modules/
 bun.lock
-/tmp/
+package-lock.json
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
 *.log
 bot.log
-.env
-telegram-mcp.json
+api.log
+
+# Sessions & Config
 sessions.json
+telegram-mcp.json
+
+# OS & Editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build & Temp
+/tmp/
+/dist/
+/build/
+.next/
+out/
+
+# Database
+*.db
+*.sqlite
+postgres_data/
+redis_data/
+
+# Uploads
+/uploads/
+*.tmp
