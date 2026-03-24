@@ -1,6 +1,6 @@
-# NewBot: Claude AI + Telegram Bot + Web Dashboard
+# NewBot: Claude AI + Telegram Bot
 
-Полнофункциональная система для генерации контента через Claude AI с Telegram ботом, REST API, веб-интерфейсом и платёжной системой.
+Telegram-бот для генерации контента через Claude AI с поддержкой голосовых сообщений, REST API, управлением токенами и платёжной системой.
 
 ## 🏗️ Архитектура
 
@@ -18,21 +18,13 @@
 │       └──> OpenAI Whisper (voice transcription)              │
 │                                                               │
 │  REST API (Express/Node)                                     │
-│  ├─ User Management                                          │
-│  ├─ Generation History                                       │
-│  ├─ Token System                                             │
-│  ├─ Stripe Integration                                       │
+│  ├─ User Management & Profiles                               │
+│  ├─ Generation History & Status                              │
+│  ├─ Token Balance System                                     │
+│  ├─ Stripe Payment Integration                               │
 │  └─ JWT Authentication                                       │
 │       │                                                       │
 │       └──> PostgreSQL Database                               │
-│                                                               │
-│  Web Dashboard (React/Vite)                                  │
-│  ├─ Generation Gallery                                       │
-│  ├─ User Profile                                             │
-│  ├─ Payment UI                                               │
-│  └─ Responsive Design                                        │
-│       │                                                       │
-│       └──> REST API + JWT                                    │
 │                                                               │
 │  Infrastructure                                              │
 │  ├─ Docker Compose (PostgreSQL, Redis)                       │
@@ -64,28 +56,23 @@
   - Документированные маршруты
 - **Аутентификация:** JWT Bearer tokens
 
-### 3. **Веб-приложение** (`web/`)
-- **Стек:** React 18, Vite, TailwindCSS, Zustand
-- **Страницы:**
-  - LoginPage (Telegram OAuth)
-  - HomePage (галерея, профиль, платежи)
-  - GenerationGallery (история с фильтрацией)
-- **Особенности:**
-  - Responsive design
-  - LocalStorage persistence
-  - Real-time status updates
-
-### 4. **Инфраструктура**
+### 3. **Инфраструктура**
 - **Docker Compose** с PostgreSQL, Redis
 - **.env.example** для конфигурации
 - Готово к деплою на Heroku, AWS, VPS
 
 ## Технологический стек
 
-- **Backend:** Express.js, PostgreSQL, JWT, Stripe
-- **Telegram:** Grammy, OpenAI Whisper, Claude Code CLI
-- **Frontend:** React 18, Vite, TailwindCSS, Zustand
-- **DevOps:** Docker, Docker Compose, Bun
+- **Bot Runtime:** Bun
+- **Bot Framework:** Grammy
+- **Bot AI:** Claude Code CLI
+- **Voice Recognition:** OpenAI Whisper
+- **API:** Express.js, TypeScript
+- **Database:** PostgreSQL 16
+- **Cache:** Redis 7
+- **Authentication:** JWT
+- **Payments:** Stripe
+- **DevOps:** Docker, Docker Compose
 
 ## Как это работает
 
@@ -113,25 +100,7 @@ Database (async)
 Telegram → Reply with result
 ```
 
-### 2️⃣ Web App Flow
-
-```
-User → LoginPage (Telegram OAuth)
-    ↓
-/api/auth/telegram → JWT Token
-    ↓
-localStorage → Store token
-    ↓
-HomePage
-    ├─ Gallery Tab
-    │  └─ /api/generations → List all
-    ├─ Profile Tab
-    │  └─ /api/users/me → User info
-    └─ Payments Tab
-       └─ Stripe integration (coming soon)
-```
-
-### 3️⃣ Database Flow
+### 2️⃣ Database Flow
 
 ```
 Generation Created → Create record (status: pending)
@@ -216,13 +185,14 @@ TELEGRAM_BOT_TOKEN=...
 OPENAI_API_KEY=...
 ANTHROPIC_API_KEY=...
 
-# API + Web
+# API & Database
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=newbot
 DB_USER=postgres
 DB_PASSWORD=postgres
 
+# Authentication & Payments
 JWT_SECRET=your-secret-key
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
@@ -248,11 +218,11 @@ journalctl --user -u claude-telegram -f      # логи
 ### Docker
 
 ```bash
-# Запуск API в контейнере
-docker-compose up -d api
+# Запуск всего стека (Bot + API + DB + Redis)
+docker-compose up -d
 
-# Запуск всего стека (API + DB + Web)
-docker-compose up
+# Или запустить отдельно
+docker-compose up -d postgres redis api
 ```
 
 ### Облачные сервисы
@@ -281,19 +251,13 @@ newbot/
 │   │   ├── client.ts               # Connection pool
 │   │   └── schema.sql              # Tables
 │   └── bot-integration.ts          # Bot ↔ API bridge
-├── web/                            # React web app (Vite)
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   ├── pages/                  # LoginPage, HomePage
-│   │   ├── components/             # Gallery, GenerationCard
-│   │   └── lib/                    # API client, Zustand store
-│   └── index.html
 ├── docker-compose.yml              # Local development stack
 ├── Dockerfile.api                  # API container
 ├── package.json                    # Main dependencies
 ├── .env.example                    # Configuration template
 ├── README.md                        # This file
+├── DEPLOYMENT.md                   # Deployment guides
+├── CONTRIBUTING.md                 # Developer guide
 └── sessions.json                   # Bot session cache (runtime)
 ```
 
