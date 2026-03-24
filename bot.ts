@@ -1,7 +1,8 @@
 import { Bot } from "grammy";
 import { homedir } from "os";
 import { join } from "path";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { randomUUID } from "crypto";
 
 // Load token
 const envPath = join(homedir(), ".claude", "channels", "telegram", ".env");
@@ -26,6 +27,31 @@ try {
   allowedUsers = access.allowFrom || [];
 } catch {}
 
+// Session management: Telegram userId -> Claude session UUID
+const sessionsFile = join("/home/nel/newbot", "sessions.json");
+let sessions: Record<string, { sessionId: string; messageCount: number }> = {};
+try {
+  if (existsSync(sessionsFile)) {
+    sessions = JSON.parse(readFileSync(sessionsFile, "utf-8"));
+  }
+} catch {}
+
+function saveSessions() {
+  writeFileSync(sessionsFile, JSON.stringify(sessions, null, 2));
+}
+
+function getOrCreateSession(userId: string): { sessionId: string; isNew: boolean } {
+  if (sessions[userId]) {
+    sessions[userId].messageCount++;
+    saveSessions();
+    return { sessionId: sessions[userId].sessionId, isNew: false };
+  }
+  const sessionId = randomUUID();
+  sessions[userId] = { sessionId, messageCount: 1 };
+  saveSessions();
+  return { sessionId, isNew: true };
+}
+
 const bot = new Bot(token);
 
 // Rate limiting: max 5 requests per minute per user
@@ -41,8 +67,11 @@ function isRateLimited(userId: string): boolean {
   return false;
 }
 
-async function askClaude(prompt: string): Promise<string> {
-  const proc = Bun.spawn(["/home/nel/newbot/ask-claude.sh", prompt], {
+async function askClaude(prompt: string, userId: string): Promise<string> {
+  const { sessionId, isNew } = getOrCreateSession(userId);
+
+  const args = ["/home/nel/newbot/ask-claude.sh", prompt, sessionId, isNew ? "new" : "resume"];
+  const proc = Bun.spawn(args, {
     cwd: "/home/nel/newbot",
     stdout: "pipe",
     stderr: "pipe",
@@ -56,7 +85,7 @@ async function askClaude(prompt: string): Promise<string> {
 
   clearTimeout(timeout);
 
-  console.log(`Claude done: code=${exitCode}, stdout=${stdout.length}b, stderr=${stderr.length}b`);
+  console.log(`Claude done: code=${exitCode}, stdout=${stdout.length}b, stderr=${stderr.length}b, session=${sessionId.slice(0, 8)}`);
   if (stderr) console.log(`stderr: ${stderr.slice(0, 300)}`);
 
   if (stdout.trim()) return stdout.trim();
@@ -76,6 +105,14 @@ bot.on("message:text", async (ctx) => {
 
   const text = ctx.message.text;
 
+  // Command: /reset — start new conversation
+  if (text === "/reset") {
+    delete sessions[userId];
+    saveSessions();
+    await ctx.reply("Контекст очищен. Начинаем новый диалог.").catch(() => {});
+    return;
+  }
+
   if (isRateLimited(userId)) {
     await ctx.reply("Слишком много запросов. Подождите минуту.").catch(() => {});
     return;
@@ -86,7 +123,7 @@ bot.on("message:text", async (ctx) => {
   const typing = startTyping(ctx.chat.id);
 
   try {
-    const reply = await askClaude(text);
+    const reply = await askClaude(text, userId);
     clearInterval(typing);
 
     if (reply.length <= 4096) {

@@ -5,3 +5,4 @@ bun.lock
 bot.log
 .env
 telegram-mcp.json
+sessions.json
